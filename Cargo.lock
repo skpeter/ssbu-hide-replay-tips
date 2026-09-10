@@ -3,25 +3,6 @@
 version = 4
 
 [[package]]
-name = "arcropolis-api"
-version = "0.1.1"
-source = "git+https://github.com/Raytwo/arcropolis_api.git#5d100d3eb48a4591839925f74f7cf2c781f09f15"
-dependencies = [
- "arcropolis-api-macro",
- "crc32fast",
- "skyline 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "arcropolis-api-macro"
-version = "0.1.0"
-source = "git+https://github.com/Raytwo/arcropolis_api.git#5d100d3eb48a4591839925f74f7cf2c781f09f15"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -38,10 +19,10 @@ dependencies = [
 
 [[package]]
 name = "hide_replay_tips"
-version = "1.1.0"
+version = "1.1.5"
 dependencies = [
- "arcropolis-api",
- "skyline 0.6.0 (git+https://github.com/ultimate-research/skyline-rs.git)",
+ "crc32fast",
+ "skyline",
 ]
 
 [[package]]
@@ -86,34 +67,11 @@ dependencies = [
 [[package]]
 name = "skyline"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4c2c28cda0d198befe59479c593537fc306cabb61d32a9428fcd2725df35c6"
-dependencies = [
- "libc-nnsdk",
- "nnsdk",
- "skyline_macro 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "skyline"
-version = "0.6.0"
 source = "git+https://github.com/ultimate-research/skyline-rs.git#6b52d321275639f26c2371d8142550ba0013a5e4"
 dependencies = [
  "libc-nnsdk",
  "nnsdk",
- "skyline_macro 0.2.1 (git+https://github.com/ultimate-research/skyline-rs.git)",
-]
-
-[[package]]
-name = "skyline_macro"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c6ce616cf990bbff33e6dfdf47bfc0add2e5fca5ba3dbefda64c92bd9fc8068"
-dependencies = [
- "lazy_static",
- "proc-macro2",
- "quote",
- "syn",
+ "skyline_macro",
 ]
 
 [[package]]

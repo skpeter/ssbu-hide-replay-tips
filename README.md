@@ -1,8 +1,10 @@
 # Hide Replay Tips
 
-Skyline plugin that hides Super Smash Bros. Ultimate's replay / movie control overlay — the same HUD that **X + D-pad Down** toggles during playback.
+Skyline plugin that hides Super Smash Bros. Ultimate's replay playback control overlay — the same HUD that **X + D-pad Down** toggles during playback.
 
-It does **not** ship Nintendo files. ARCropolis loads the vanilla `layout.arc` from `data.arc`; this plugin patches that buffer in place (hide BFLYT panes, zero BFLAN visibility tracks) and hands it back. Live-match HUD is unchanged.
+It does **not** ship Nintendo files. ARCropolis loads the vanilla `layout.arc` from `data.arc`; this plugin patches that buffer in place (hide BFLYT panes, disable BFLAN tracks) and hands it back.
+
+The replay controls share `info_pause_camera` with the in-match pause-camera overlay, so that HUD is hidden too. The pause **menu** (`info_pause`) is not hooked.
 
 ## Install
 
@@ -20,10 +22,10 @@ Hold **L** on boot if you need to skip plugins.
 
 | Game path | Why |
 |---|---|
-| `ui/layout/info/info_movie_recording/info_movie_recording/layout.arc` | Recording / convert-to-video guide |
-| `ui/layout/info/info_movie_screen/info_movie_screen/layout.arc` | Replay playback control overlay |
-
-`info_pause` is not hooked, so pausing a real match still works.
+| `ui/layout/info/info_movie_recording/.../layout.arc` | Recording / convert-to-video guide |
+| `ui/layout/info/info_movie_screen/.../layout.arc` | Replay movie overlay |
+| `ui/layout/info/info_movie_result/.../layout.arc` | Replay / convert result overlay |
+| `ui/layout/info/info_pause_camera/.../layout.arc` | Replay playback controls (also the pause-camera HUD) |
 
 ## Build
 

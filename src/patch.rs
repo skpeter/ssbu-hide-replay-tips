@@ -1,8 +1,18 @@
-//! In-place hide of Smash Ultimate layout HUD panes (BFLYT) and visibility tracks (BFLAN).
-//! Mutates a decompressed `layout.arc` SARC; size is unchanged.
+//! In-place hide of Smash Ultimate layout HUD panes (BFLYT) and BFLAN tracks.
 
-const PANE_SECTIONS: [&[u8]; 6] = [b"pan1", b"pic1", b"txt1", b"wnd1", b"bnd1", b"prt1"];
-const VIS_TAGS: [&[u8]; 2] = [b"FLVI", b"RLVI"];
+const PANE_SECTIONS: [&[u8]; 8] = [
+    b"pan1", b"pic1", b"txt1", b"wnd1", b"bnd1", b"prt1", b"cnt1", b"scr1",
+];
+
+#[derive(Default)]
+pub struct PatchStats {
+    pub panes: u32,
+    pub anims: u32,
+    pub flyt: u32,
+    pub flan: u32,
+    pub other: u32,
+    pub inners: String,
+}
 
 fn be_bom(data: &[u8], at: usize) -> bool {
     data.get(at..at + 2) == Some(&b"\xfe\xff"[..])
@@ -26,21 +36,100 @@ fn u32_at(data: &[u8], off: usize, be: bool) -> Option<u32> {
     })
 }
 
-fn patch_bflyt(data: &mut [u8]) -> u32 {
-    if data.get(0..4) != Some(&b"FLYT"[..]) {
-        return 0;
+fn set_u16(data: &mut [u8], off: usize, be: bool, v: u16) {
+    if off + 2 > data.len() {
+        return;
     }
-    let be = be_bom(data, 4);
+    let b = if be { v.to_be_bytes() } else { v.to_le_bytes() };
+    data[off..off + 2].copy_from_slice(&b);
+}
+
+fn set_f32(data: &mut [u8], off: usize, be: bool, v: f32) {
+    if off + 4 > data.len() {
+        return;
+    }
+    let b = if be { v.to_be_bytes() } else { v.to_le_bytes() };
+    data[off..off + 4].copy_from_slice(&b);
+}
+
+fn magic_label(m: &[u8]) -> String {
+    if m.len() >= 4 && m.iter().take(4).all(|b| *b >= 0x20 && *b < 0x7f) {
+        String::from_utf8_lossy(&m[..4]).into_owned()
+    } else if m.len() >= 4 {
+        format!("{:02x}{:02x}{:02x}{:02x}", m[0], m[1], m[2], m[3])
+    } else {
+        "?".into()
+    }
+}
+
+fn yaz0_decompress(src: &[u8]) -> Option<Vec<u8>> {
+    if src.len() < 16 || src.get(0..4) != Some(&b"Yaz0"[..]) {
+        return None;
+    }
+    let dest_end = u32::from_be_bytes([src[4], src[5], src[6], src[7]]) as usize;
+    if dest_end == 0 || dest_end > 0x800000 {
+        return None;
+    }
+    let mut dest = Vec::with_capacity(dest_end);
+    let mut i = 16usize;
+    let mut group = 0u8;
+    let mut bits = 0u32;
+    while dest.len() < dest_end {
+        if bits == 0 {
+            if i >= src.len() {
+                break;
+            }
+            group = src[i];
+            i += 1;
+            bits = 8;
+        }
+        if group & 0x80 != 0 {
+            if i >= src.len() {
+                break;
+            }
+            dest.push(src[i]);
+            i += 1;
+        } else {
+            if i + 1 >= src.len() {
+                break;
+            }
+            let b1 = src[i];
+            let b2 = src[i + 1];
+            i += 2;
+            let dist = (((b1 as usize) & 0xF) << 8) | (b2 as usize);
+            let mut copy = ((b1 >> 4) as usize) + 2;
+            if copy == 2 {
+                if i >= src.len() {
+                    break;
+                }
+                copy = src[i] as usize + 18;
+                i += 1;
+            }
+            for _ in 0..copy {
+                if dest.len() <= dist {
+                    break;
+                }
+                let b = dest[dest.len() - dist - 1];
+                dest.push(b);
+            }
+        }
+        group = group.wrapping_shl(1);
+        bits -= 1;
+    }
+    dest.truncate(dest_end);
+    Some(dest)
+}
+
+fn walk_sections(data: &[u8], be: bool, mut on_sec: impl FnMut(usize, &[u8], usize)) {
     let header_size = match u16_at(data, 6, be) {
         Some(v) => v as usize,
-        None => return 0,
+        None => return,
     };
     let nsec = match u16_at(data, 0x10, be) {
         Some(v) => v as usize,
-        None => return 0,
+        None => return,
     };
     let mut off = header_size;
-    let mut hidden = 0u32;
     for _ in 0..nsec {
         if off + 8 > data.len() {
             break;
@@ -53,63 +142,39 @@ fn patch_bflyt(data: &mut [u8]) -> u32 {
         if size < 8 || off + size > data.len() {
             break;
         }
-        if PANE_SECTIONS.iter().any(|m| *m == magic) {
-            data[off + 8] &= 0xFE;
-            data[off + 10] = 0;
-            hidden += 1;
-        }
+        on_sec(off, magic, size);
         off += size;
         if off % 4 != 0 {
             off += 4 - (off % 4);
         }
     }
-    hidden
 }
 
-fn zero_flvi_keys(data: &mut [u8], tag_start: usize, tag_size: usize, be: bool) -> u32 {
-    let end = tag_start + tag_size;
-    let body = tag_start + 8;
-    if body + 4 > end {
+fn patch_bflyt(data: &mut [u8]) -> u32 {
+    if data.get(0..4) != Some(&b"FLYT"[..]) {
         return 0;
     }
-    let mut n = u16_at(data, body, be).unwrap_or(0);
-    if n == 0 || n > 64 {
-        n = u16_at(data, body + 2, be).unwrap_or(0);
-        if n == 0 || n > 64 {
-            return 0;
+    let be = be_bom(data, 4);
+    let mut secs: Vec<(usize, usize)> = Vec::new();
+    walk_sections(data, be, |off, magic, size| {
+        if PANE_SECTIONS.iter().any(|m| *m == magic) {
+            secs.push((off, size));
+        }
+    });
+    let hidden = secs.len() as u32;
+    for (off, size) in secs {
+        data[off + 8] = 0;
+        data[off + 10] = 0;
+        let body = off + 8;
+        if size >= 0x4C {
+            set_f32(data, body + 0x24, be, -8000.0);
+            set_f32(data, body + 0x3C, be, 0.0);
+            set_f32(data, body + 0x40, be, 0.0);
+            set_f32(data, body + 0x44, be, 0.0);
+            set_f32(data, body + 0x48, be, 0.0);
         }
     }
-    let mut pos = body + 4;
-    let mut patched = 0u32;
-    for _ in 0..n {
-        if pos + 12 > end {
-            break;
-        }
-        let curve = data[pos + 2];
-        let key_count = u16_at(data, pos + 4, be).unwrap_or(0) as usize;
-        let key_off = u32_at(data, pos + 8, be).unwrap_or(0) as usize;
-        let mut keys = tag_start + key_off;
-        if keys < pos || keys >= end {
-            keys = pos + key_off;
-        }
-        for k in 0..key_count {
-            if curve == 2 {
-                let slot = keys + k * 12 + 4;
-                if slot + 4 <= end {
-                    data[slot..slot + 4].fill(0);
-                    patched += 1;
-                }
-            } else {
-                let slot = keys + k * 8 + 4;
-                if slot + 2 <= end {
-                    data[slot..slot + 2].fill(0);
-                    patched += 1;
-                }
-            }
-        }
-        pos += 12;
-    }
-    patched
+    hidden
 }
 
 fn patch_bflan(data: &mut [u8]) -> u32 {
@@ -117,57 +182,87 @@ fn patch_bflan(data: &mut [u8]) -> u32 {
         return 0;
     }
     let be = be_bom(data, 4);
-    let mut patched = 0u32;
-    let mut i = 0usize;
-    while i + 8 <= data.len() {
-        let mag = &data[i..i + 4];
-        if VIS_TAGS.iter().any(|t| *t == mag) {
-            if let Some(size) = u32_at(data, i + 4, be) {
-                let size = size as usize;
-                if size >= 8 && i + size <= data.len() {
-                    patched += zero_flvi_keys(data, i, size, be);
-                    i += size;
-                    continue;
+    let mut pai: Vec<(usize, usize)> = Vec::new();
+    walk_sections(data, be, |off, magic, size| {
+        if magic == b"pai1" {
+            pai.push((off, size));
+        }
+    });
+    if pai.is_empty() {
+        let mut i = 0usize;
+        while i + 16 <= data.len() {
+            if &data[i..i + 4] == b"pai1" {
+                if let Some(size) = u32_at(data, i + 4, be) {
+                    let size = size as usize;
+                    if size >= 0x12 && i + size <= data.len() {
+                        pai.push((i, size));
+                        i += size;
+                        continue;
+                    }
                 }
             }
+            i += 4;
         }
-        i += 4;
     }
-    patched
+    for (off, size) in &pai {
+        if *size >= 0x10 {
+            set_u16(data, off + 0x0C, be, 0);
+            set_u16(data, off + 0x0E, be, 0);
+        }
+    }
+    pai.len() as u32
 }
 
-fn patch_inner(data: &mut [u8]) -> (u32, u32) {
+fn patch_bytes(data: &mut [u8], stats: &mut PatchStats) {
+    let mag = magic_label(data.get(..4).unwrap_or(&[]));
+    if !stats.inners.is_empty() {
+        stats.inners.push(',');
+    }
+    stats.inners.push_str(&mag);
     match data.get(0..4) {
-        Some(b"FLYT") => (patch_bflyt(data), 0),
-        Some(b"FLAN") => (0, patch_bflan(data)),
-        _ => (0, 0),
+        Some(b"FLYT") => {
+            stats.flyt += 1;
+            stats.panes += patch_bflyt(data);
+        }
+        Some(b"FLAN") => {
+            stats.flan += 1;
+            stats.anims += patch_bflan(data);
+        }
+        Some(b"Yaz0") => {
+            if let Some(mut inner) = yaz0_decompress(data) {
+                patch_bytes(&mut inner, stats);
+            } else {
+                stats.other += 1;
+            }
+        }
+        _ => stats.other += 1,
     }
 }
 
-/// Patch a decompressed `layout.arc` (SARC) in place. Returns (panes hidden, vis keys zeroed).
-pub fn patch_layout_arc(data: &mut [u8]) -> (u32, u32) {
+/// Patch a decompressed `layout.arc` (SARC) in place.
+pub fn patch_layout_arc(data: &mut [u8]) -> PatchStats {
+    let mut stats = PatchStats::default();
     if data.get(0..4) != Some(&b"SARC"[..]) {
-        return patch_inner(data);
+        patch_bytes(data, &mut stats);
+        return stats;
     }
     let be = be_bom(data, 6);
     let header_size = match u16_at(data, 4, be) {
         Some(v) => v as usize,
-        None => return (0, 0),
+        None => return stats,
     };
     let data_offset = match u32_at(data, 0xC, be) {
         Some(v) => v as usize,
-        None => return (0, 0),
+        None => return stats,
     };
     let sfat = header_size;
     if data.get(sfat..sfat + 4) != Some(&b"SFAT"[..]) {
-        return (0, 0);
+        return stats;
     }
     let node_count = match u16_at(data, sfat + 6, be) {
         Some(v) => v as usize,
-        None => return (0, 0),
+        None => return stats,
     };
-    let mut panes = 0u32;
-    let mut vis = 0u32;
     let nodes = sfat + 0xC;
     for i in 0..node_count {
         let n = nodes + i * 16;
@@ -184,9 +279,7 @@ pub fn patch_layout_arc(data: &mut [u8]) -> (u32, u32) {
         if lo >= hi || hi > data.len() {
             continue;
         }
-        let (p, v) = patch_inner(&mut data[lo..hi]);
-        panes += p;
-        vis += v;
+        patch_bytes(&mut data[lo..hi], &mut stats);
     }
-    (panes, vis)
+    stats
 }
