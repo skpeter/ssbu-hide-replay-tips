@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Patcher self-test
+        run: python scripts/patch_layouts.py --self-test
+      - name: Pack patcher zip
+        run: |
+          set -euo pipefail
+          STAGE="hide-replay-tips-${GITHUB_REF_NAME}"
+          mkdir "$STAGE"
+          cp LICENSE README.md "$STAGE/"
+          cp -r mod scripts vanilla "$STAGE/"
+          zip -r "${STAGE}.zip" "$STAGE"
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "hide-replay-tips-${GITHUB_REF_NAME}.zip" \
+            --title "Hide Replay Tips ${GITHUB_REF_NAME}" \
+            --notes-file - <<EOF
+          Patcher for the ARCropolis replay/movie control overlay hide.
+
+          This zip does **not** include Nintendo \`layout.arc\` files. Dump the two archives with [ArcExplorer](https://github.com/ScanMountGoat/ArcExplorer/releases), then:
+
+          \`\`\`sh
+          python scripts/patch_layouts.py
+          \`\`\`
+
+          Copy \`dist/hide-replay-tips\` to \`sd:/ultimate/mods/\` and enable it in ARCropolis.
+
+          Targets:
+          - \`ui/layout/info/info_movie_recording/info_movie_recording/layout.arc\`
+          - \`ui/layout/info/info_movie_screen/info_movie_screen/layout.arc\`
+          EOF

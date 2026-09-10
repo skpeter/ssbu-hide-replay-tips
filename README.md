@@ -15,6 +15,10 @@ Live matches are unchanged. This repo does **not** ship Nintendo layout files. Y
 
 The patcher turns every BFLYT pane invisible (and alpha 0) and zeroes BFLAN visibility tracks so the "show tips at the start of each replay" animation cannot bring them back.
 
+## Download
+
+[Releases](https://github.com/skpeter/ssbu-hide-replay-tips/releases) attach a patcher zip (scripts + `info.toml`). That zip still needs your dumped `layout.arc` files; it is not a drop-in SD mod.
+
 ## Requirements
 
 - [ARCropolis](https://github.com/Raytwo/ARCropolis/releases)
