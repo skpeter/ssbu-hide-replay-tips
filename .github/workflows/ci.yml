@@ -6,12 +6,37 @@ on:
   pull_request:
 
 jobs:
-  self-test:
+  host-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Patcher self-test
-        run: python scripts/patch_layouts.py --self-test
+      - run: python scripts/patch_layouts.py --self-test
+
+  plugin:
+    name: Plugin NRO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          target: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: plugin
+          cache-all-crates: true
+      - name: Install Skyline
+        run: |
+          cargo install cargo-skyline
+          cargo-skyline skyline update-std
+      - name: Build release NRO
+        run: RUSTFLAGS=-g cargo-skyline skyline build --release
+      - name: Package SD zip
+        run: bash scripts/package-sd.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hide-replay-tips-sd
+          path: hide-replay-tips-sd.zip
+

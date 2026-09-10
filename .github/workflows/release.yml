@@ -13,39 +13,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          python-version: "3.12"
-      - name: Patcher self-test
-        run: python scripts/patch_layouts.py --self-test
-      - name: Pack patcher zip
+          target: x86_64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: plugin
+          cache-all-crates: true
+      - name: Install Skyline
         run: |
-          set -euo pipefail
-          STAGE="hide-replay-tips-${GITHUB_REF_NAME}"
-          mkdir "$STAGE"
-          cp LICENSE README.md "$STAGE/"
-          cp -r mod scripts vanilla "$STAGE/"
-          zip -r "${STAGE}.zip" "$STAGE"
+          cargo install cargo-skyline
+          cargo-skyline skyline update-std
+      - name: Build release NRO
+        run: RUSTFLAGS=-g cargo-skyline skyline build --release
+      - name: Package SD zip
+        run: bash scripts/package-sd.sh
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" \
-            "hide-replay-tips-${GITHUB_REF_NAME}.zip" \
+            hide-replay-tips-sd.zip \
             --title "Hide Replay Tips ${GITHUB_REF_NAME}" \
             --notes-file - <<EOF
-          Patcher for the ARCropolis replay/movie control overlay hide.
+          Drop-in Skyline plugin. Extract onto the SD root (ARCropolis required).
 
-          This zip does **not** include Nintendo \`layout.arc\` files. Dump the two archives with [ArcExplorer](https://github.com/ScanMountGoat/ArcExplorer/releases), then:
-
-          \`\`\`sh
-          python scripts/patch_layouts.py
+          \`\`\`
+          atmosphere/contents/01006A800016E000/romfs/skyline/plugins/libhide_replay_tips.nro
           \`\`\`
 
-          Copy \`dist/hide-replay-tips\` to \`sd:/ultimate/mods/\` and enable it in ARCropolis.
-
-          Targets:
-          - \`ui/layout/info/info_movie_recording/info_movie_recording/layout.arc\`
-          - \`ui/layout/info/info_movie_screen/info_movie_screen/layout.arc\`
+          Vanilla replay/movie HUD layouts are patched in memory. No Nintendo files are included.
           EOF

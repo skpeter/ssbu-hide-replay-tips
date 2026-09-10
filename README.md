@@ -1,79 +1,50 @@
 # Hide Replay Tips
 
-ARCropolis UI mod that hides Super Smash Bros. Ultimate's replay / movie control overlay — the same HUD that **X + D-pad Down** toggles during playback.
+Skyline plugin that hides Super Smash Bros. Ultimate's replay / movie control overlay — the same HUD that **X + D-pad Down** toggles during playback.
 
-Live matches are unchanged. This repo does **not** ship Nintendo layout files. You dump two `layout.arc` archives from your copy of the game, run the patcher, then drop the output on the SD card.
+It does **not** ship Nintendo files. ARCropolis loads the vanilla `layout.arc` from `data.arc`; this plugin patches that buffer in place (hide BFLYT panes, zero BFLAN visibility tracks) and hands it back. Live-match HUD is unchanged.
+
+## Install
+
+Requires [ARCropolis](https://github.com/Raytwo/ARCropolis/releases) (and Skyline, which it already uses).
+
+Extract a [release](https://github.com/skpeter/ssbu-hide-replay-tips/releases) zip onto the SD root, or copy:
+
+```
+atmosphere/contents/01006A800016E000/romfs/skyline/plugins/libhide_replay_tips.nro
+```
+
+Hold **L** on boot if you need to skip plugins.
 
 ## What it patches
 
 | Game path | Why |
 |---|---|
-| `ui/layout/info/info_movie_recording/info_movie_recording/layout.arc` | Recording / convert-to-video guide (REC bar, prompts) |
+| `ui/layout/info/info_movie_recording/info_movie_recording/layout.arc` | Recording / convert-to-video guide |
 | `ui/layout/info/info_movie_screen/info_movie_screen/layout.arc` | Replay playback control overlay |
 
-`info_pause` is intentionally left alone so pausing a real match still works.
+`info_pause` is not hooked, so pausing a real match still works.
 
-The patcher turns every BFLYT pane invisible (and alpha 0) and zeroes BFLAN visibility tracks so the "show tips at the start of each replay" animation cannot bring them back.
-
-## Download
-
-[Releases](https://github.com/skpeter/ssbu-hide-replay-tips/releases) attach a patcher zip (scripts + `info.toml`). That zip still needs your dumped `layout.arc` files; it is not a drop-in SD mod.
-
-## Requirements
-
-- [ARCropolis](https://github.com/Raytwo/ARCropolis/releases)
-- Python 3.10+ (stdlib only)
-- [ArcExplorer](https://github.com/ScanMountGoat/ArcExplorer/releases) to dump the two archives from `data.arc`
-
-## Dump
-
-1. Open Smash Ultimate's `data.arc` in ArcExplorer.
-2. Extract:
-   - `ui/layout/info/info_movie_recording/info_movie_recording/layout.arc`
-   - `ui/layout/info/info_movie_screen/info_movie_screen/layout.arc`
-3. Put them under `vanilla/` using either the game folders or flat names:
-
-```
-vanilla/ui/layout/info/info_movie_recording/info_movie_recording/layout.arc
-vanilla/ui/layout/info/info_movie_screen/info_movie_screen/layout.arc
-```
-
-or:
-
-```
-vanilla/info_movie_recording.arc
-vanilla/info_movie_screen.arc
-```
-
-## Build the mod
+## Build
 
 ```sh
-python scripts/patch_layouts.py
-# optional: python scripts/patch_layouts.py --self-test
+cargo install cargo-skyline
+cargo skyline build --release
 ```
 
-Output:
+NRO:
 
 ```
-dist/hide-replay-tips/info.toml
-dist/hide-replay-tips/ui/layout/info/...
+target/aarch64-skyline-switch/release/libhide_replay_tips.nro
 ```
 
-Copy `dist/hide-replay-tips` to `sd:/ultimate/mods/hide-replay-tips`. Enable it in ARCropolis's mod manager (Smash eShop icon).
-
-To zip for SD-root extract:
+SD zip:
 
 ```sh
-# Windows
-powershell -File scripts/package-sd.ps1
-# Unix
 bash scripts/package-sd.sh
+# Windows: powershell -File scripts/package-sd.ps1
 ```
-
-## Why not Skyline?
-
-Skyline / `skyline-smash` has no "hide replay tips" API. Injecting X + Down would work only if gated to replay playback; this layout replace is replay-only by file path and needs no HID.
 
 ## License
 
-MIT for the patcher and packaging. Dumped / patched `layout.arc` files are Nintendo's and must not be committed or redistributed.
+MIT for this plugin. Vanilla layouts stay in the game; they are never redistributed.

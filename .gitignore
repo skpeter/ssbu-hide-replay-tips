@@ -1,3 +1,4 @@
+target/
 dist/
 *.zip
 __pycache__/
@@ -6,6 +7,5 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
-# Dumped / patched Nintendo layout archives. Do not commit.
+# Dumped Nintendo layout archives. Do not commit.
 *.arc
-!**/info.toml

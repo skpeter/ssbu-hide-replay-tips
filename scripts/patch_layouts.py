@@ -238,20 +238,42 @@ def patch_bflan(data: bytearray) -> int:
     return patched
 
 
-def patch_layout_arc(blob: bytes) -> tuple[bytes, int, int]:
-    files, be, multiplier = read_sarc(blob)
+def patch_layout_arc_inplace(data: bytearray) -> tuple[int, int]:
+    """Mutate a decompressed SARC in place (same algorithm as the Skyline plugin)."""
+    if data[:4] != b"SARC":
+        if data[:4] == b"FLYT":
+            return patch_bflyt(data), 0
+        if data[:4] == b"FLAN":
+            return 0, patch_bflan(data)
+        return 0, 0
+    be = data[6:8] == b"\xfe\xff"
+    header_size = u16(data, 4, be)
+    data_offset = u32(data, 0xC, be)
+    sfat = header_size
+    node_count = u16(data, sfat + 6, be)
+    nodes = sfat + 0xC
     panes = 0
     vis = 0
-    out: dict[str, bytes] = {}
-    for name, raw in files.items():
-        buf = bytearray(raw)
-        lower = name.lower()
-        if lower.endswith(".bflyt"):
+    for i in range(node_count):
+        n = nodes + i * 16
+        start = data_offset + u32(data, n + 8, be)
+        end = data_offset + u32(data, n + 12, be)
+        blob = memoryview(data)[start:end]
+        buf = bytearray(blob)
+        if buf[:4] == b"FLYT":
             panes += patch_bflyt(buf)
-        elif lower.endswith(".bflan"):
+        elif buf[:4] == b"FLAN":
             vis += patch_bflan(buf)
-        out[name] = bytes(buf)
-    return write_sarc(out, be, multiplier), panes, vis
+        else:
+            continue
+        data[start:end] = buf
+    return panes, vis
+
+
+def patch_layout_arc(blob: bytes) -> tuple[bytes, int, int]:
+    data = bytearray(yaz0_decompress(blob))
+    panes, vis = patch_layout_arc_inplace(data)
+    return bytes(data), panes, vis
 
 
 def find_vanilla(root: Path) -> dict[str, Path]:
@@ -321,8 +343,9 @@ def self_test() -> None:
     files, be, _ = read_sarc(packed)
     assert not be
     assert files["blyt/test.bflyt"] == flyt
-    out, panes, _vis = patch_layout_arc(packed)
-    again, _, _ = read_sarc(out)
+    buf = bytearray(packed)
+    panes, _vis = patch_layout_arc_inplace(buf)
+    again, _, _ = read_sarc(bytes(buf))
     patched = again["blyt/test.bflyt"]
     if panes != 1 or (patched[0x1C] & 1) or patched[0x1E] != 0:
         die(f"self-test failed panes={panes} flags={patched[0x1C]:02x} alpha={patched[0x1E]}")

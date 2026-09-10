@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MOD="$ROOT/dist/hide-replay-tips"
+NRO="$ROOT/target/aarch64-skyline-switch/release/libhide_replay_tips.nro"
 ZIP="$ROOT/hide-replay-tips-sd.zip"
-if [[ ! -f "$MOD/info.toml" ]]; then
-  echo "missing $MOD; run python scripts/patch_layouts.py first" >&2
+if [[ ! -f "$NRO" ]]; then
+  echo "missing $NRO; cargo skyline build --release first" >&2
   exit 1
 fi
 STAGE="$ROOT/dist/sd"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/ultimate/mods"
-cp -a "$MOD" "$STAGE/ultimate/mods/hide-replay-tips"
+DEST="$STAGE/atmosphere/contents/01006A800016E000/romfs/skyline/plugins"
+mkdir -p "$DEST"
+cp "$NRO" "$DEST/libhide_replay_tips.nro"
 rm -f "$ZIP"
-(cd "$STAGE" && zip -r "$ZIP" ultimate)
+(cd "$STAGE" && zip -r "$ZIP" atmosphere)
 echo "wrote $ZIP"
