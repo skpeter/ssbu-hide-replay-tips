@@ -1,0 +1,8 @@
+display_name = "Hide Replay Tips"
+authors = "skpeter"
+version = "1.0.0"
+description = """
+Hides the replay / movie control overlay (the same HUD that X + D-pad Down toggles).
+Does not change live-match HUD.
+"""
+category = "UI"

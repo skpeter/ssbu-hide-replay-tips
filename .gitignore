@@ -1,0 +1,11 @@
+dist/
+*.zip
+__pycache__/
+.venv/
+.env
+*.pyc
+.DS_Store
+Thumbs.db
+# Dumped / patched Nintendo layout archives. Do not commit.
+*.arc
+!**/info.toml
